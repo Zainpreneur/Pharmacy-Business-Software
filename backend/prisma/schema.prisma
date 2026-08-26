@@ -1,0 +1,149 @@
+// Pharmacy Business Software - Database Schema
+// Default datasource is SQLite for zero-config local/dev use.
+// Swap provider to "postgresql" and set DATABASE_URL for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite has no native enum support in Prisma, so Role is stored as a
+// String and constrained at the application layer (see zod schemas).
+// Valid values: "ADMIN" | "PHARMACIST" | "CASHIER"
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("CASHIER")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales Sale[]
+}
+
+model Category {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  medicines Medicine[]
+}
+
+model Supplier {
+  id            Int        @id @default(autoincrement())
+  name          String
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  createdAt     DateTime   @default(now())
+  purchases     Purchase[]
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+  sales     Sale[]
+}
+
+model Medicine {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  genericName          String?
+  categoryId           Int?
+  category             Category? @relation(fields: [categoryId], references: [id])
+  manufacturer         String?
+  unit                 String   @default("pcs")
+  strength             String?
+  reorderLevel         Int      @default(10)
+  purchasePrice        Float    @default(0)
+  sellingPrice         Float    @default(0)
+  requiresPrescription Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  batches       Batch[]
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+
+  @@index([name])
+}
+
+model Batch {
+  id            Int      @id @default(autoincrement())
+  medicineId    Int
+  medicine      Medicine @relation(fields: [medicineId], references: [id])
+  batchNo       String
+  quantity      Int
+  purchasePrice Float
+  sellingPrice  Float
+  expiryDate    DateTime
+  createdAt     DateTime @default(now())
+
+  saleItems SaleItem[]
+
+  @@index([medicineId])
+  @@index([expiryDate])
+}
+
+model Purchase {
+  id          Int            @id @default(autoincrement())
+  invoiceNo   String         @unique
+  supplierId  Int
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  items       PurchaseItem[]
+  totalAmount Float          @default(0)
+  status      String         @default("RECEIVED")
+  createdAt   DateTime       @default(now())
+}
+
+model PurchaseItem {
+  id            Int      @id @default(autoincrement())
+  purchaseId    Int
+  purchase      Purchase @relation(fields: [purchaseId], references: [id])
+  medicineId    Int
+  medicine      Medicine @relation(fields: [medicineId], references: [id])
+  batchNo       String
+  quantity      Int
+  purchasePrice Float
+  sellingPrice  Float
+  expiryDate    DateTime
+}
+
+model Sale {
+  id            Int       @id @default(autoincrement())
+  invoiceNo     String    @unique
+  customerId    Int?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  items         SaleItem[]
+  subtotal      Float     @default(0)
+  discount      Float     @default(0)
+  tax           Float     @default(0)
+  totalAmount   Float     @default(0)
+  paymentMethod String    @default("CASH")
+  createdAt     DateTime  @default(now())
+}
+
+model SaleItem {
+  id         Int      @id @default(autoincrement())
+  saleId     Int
+  sale       Sale     @relation(fields: [saleId], references: [id])
+  medicineId Int
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  batchId    Int
+  batch      Batch    @relation(fields: [batchId], references: [id])
+  quantity   Int
+  unitPrice  Float
+  total      Float
+}
